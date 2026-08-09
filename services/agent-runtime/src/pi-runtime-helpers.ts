@@ -246,6 +246,11 @@ function runtimeExtensionPaths(options: RuntimeStartOptions): string[] {
       "automations.ts",
       process.env.LOCAL_STUDIO_AUTOMATIONS_EXTENSION_PATH,
     ),
+    resolveBundledResourcePath(
+      "pi-extensions",
+      "image-generation.ts",
+      process.env.LOCAL_STUDIO_IMAGE_GENERATION_EXTENSION_PATH,
+    ),
     // NOTE: session-goal injection is no longer a bundled extension — it runs
     // in-process via createGoalPromptExtension (see pi-runtime.ts), keyed by the
     // canonical piSessionId. A bundled extension read the wrong id over RPC.
