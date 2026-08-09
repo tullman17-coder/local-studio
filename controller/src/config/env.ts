@@ -24,6 +24,9 @@ export interface Config {
   llama_bin?: string;
   mlx_python?: string;
   strict_openai_models: boolean;
+  comfyui_url?: string;
+  comfyui_checkpoint?: string;
+  comfyui_output_prefix: string;
   providers: ProviderConfig[];
 }
 
@@ -102,6 +105,9 @@ export const createConfig = (): Config => {
     LOCAL_STUDIO_LLAMA_BIN: Schema.optional(Schema.String),
     LOCAL_STUDIO_MLX_PYTHON: Schema.optional(Schema.String),
     LOCAL_STUDIO_STRICT_OPENAI_MODELS: Schema.optional(Schema.String),
+    LOCAL_STUDIO_COMFYUI_URL: Schema.optional(Schema.String),
+    LOCAL_STUDIO_COMFYUI_CHECKPOINT: Schema.optional(Schema.String),
+    LOCAL_STUDIO_COMFYUI_OUTPUT_PREFIX: Schema.optional(Schema.String),
   });
 
   const coercePositiveInteger = (
@@ -144,6 +150,8 @@ export const createConfig = (): Config => {
     db_path: databasePath,
     models_dir: resolve(parsed.LOCAL_STUDIO_MODELS_DIR),
     strict_openai_models: strictOpenAIModelsEnabled,
+    comfyui_output_prefix:
+      parsed.LOCAL_STUDIO_COMFYUI_OUTPUT_PREFIX?.trim().replace(/^\/+|\/+$/g, "") || "local-studio",
     cors_origins: parseCorsOrigins(parsed.LOCAL_STUDIO_CORS_ORIGINS),
     providers: [],
   };
@@ -167,6 +175,12 @@ export const createConfig = (): Config => {
   }
   if (parsed.LOCAL_STUDIO_MLX_PYTHON) {
     config.mlx_python = parsed.LOCAL_STUDIO_MLX_PYTHON;
+  }
+  if (parsed.LOCAL_STUDIO_COMFYUI_URL?.trim()) {
+    config.comfyui_url = parsed.LOCAL_STUDIO_COMFYUI_URL.trim().replace(/\/+$/, "");
+  }
+  if (parsed.LOCAL_STUDIO_COMFYUI_CHECKPOINT?.trim()) {
+    config.comfyui_checkpoint = parsed.LOCAL_STUDIO_COMFYUI_CHECKPOINT.trim();
   }
 
   const persisted = loadPersistedConfig(config.data_dir);
