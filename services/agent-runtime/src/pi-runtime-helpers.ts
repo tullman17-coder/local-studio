@@ -173,6 +173,13 @@ export function resolveAutomationsExtensionPath(): string | null {
   );
 }
 
+export function resolveImageGenerationExtensionPath(): string | null {
+  return resolveBundledPiExtensionPath(
+    "image-generation.ts",
+    process.env.LOCAL_STUDIO_IMAGE_GENERATION_EXTENSION_PATH,
+  );
+}
+
 export function resolveTimeoutExtensionPath(): string | null {
   return resolveBundledPiExtensionPath(
     "local-studio-timeouts.ts",
@@ -281,6 +288,7 @@ function runtimeExtensionPaths(options: RuntimeStartOptions): string[] {
     resolveSubagentsExtensionPath(),
     // Lets the agent create/list/delete scheduled automations.
     resolveAutomationsExtensionPath(),
+    resolveImageGenerationExtensionPath(),
     // NOTE: session-goal injection is no longer a bundled extension — it runs
     // in-process via createGoalPromptExtension (see pi-runtime.ts), keyed by the
     // canonical piSessionId. A bundled extension read the wrong id over RPC.

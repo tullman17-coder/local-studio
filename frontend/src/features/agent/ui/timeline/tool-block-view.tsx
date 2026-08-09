@@ -28,6 +28,7 @@ import {
   parseDiffPreview,
   type DiffPreviewLine,
 } from "@/features/agent/ui/timeline/diff-preview-model";
+import { generatedImagesFromToolResult } from "@/features/agent/ui/timeline/generated-image-result";
 
 export const TOOL_ICONS: Record<ToolKind, LucideIcon> = {
   edit: FilePenLine,
@@ -491,7 +492,42 @@ function compactBrowserResult(result: string | null | undefined): string | null 
   return compactToolText(result, 1200);
 }
 
+function GeneratedImagePreview({ block }: { block: ToolBlock }) {
+  const images = generatedImagesFromToolResult(block.resultText ?? block.text);
+  return (
+    <ToolSummary block={block} open>
+      {images.length ? (
+        <div className={`grid gap-2 ${images.length > 1 ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+          {images.map((image) => (
+            <figure
+              key={image.url}
+              className="group overflow-hidden rounded-xl border border-(--border) bg-(--color-input)"
+            >
+              <a href={image.url} target="_blank" rel="noreferrer" className="block">
+                <img
+                  src={image.url}
+                  alt={image.prompt}
+                  loading="lazy"
+                  className="max-h-[36rem] w-full bg-black/20 object-contain transition duration-300 group-hover:scale-[1.01]"
+                />
+              </a>
+              <figcaption className="line-clamp-2 border-t border-(--separator) px-3 py-2 text-[length:var(--fs-sm)] leading-relaxed text-(--dim)">
+                {image.prompt}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : block.resultText ? (
+        <ToolOutput>{block.resultText}</ToolOutput>
+      ) : null}
+    </ToolSummary>
+  );
+}
+
 export function ToolBlockView({ block }: { block: ToolBlock }) {
+  if (block.name.toLowerCase() === "generate_image") {
+    return <GeneratedImagePreview block={block} />;
+  }
   const fileWritePreview = FILE_WRITE_TOOL_NAMES.has(block.name.toLowerCase())
     ? fileWritePreviewData(block)
     : null;

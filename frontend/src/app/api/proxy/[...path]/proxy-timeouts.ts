@@ -13,6 +13,7 @@ const POST_TIMEOUTS = new Map([
   ["v1/audio/speech", SPEECH_GENERATION_TIMEOUT_MS],
   ["v1/audio/voices", VOICE_REFERENCE_TIMEOUT_MS],
   ["v1/audio/runtime/stop", SYSTEM_UPSTREAM_TIMEOUT_MS],
+  ["v1/images/generations", CHAT_COMPLETION_UPSTREAM_TIMEOUT_MS],
 ]);
 
 export function getUpstreamTimeoutMs(path: string[], method = "GET"): number {
