@@ -3,9 +3,9 @@ import type { Config } from "../../config/env";
 import type { Logger } from "../../core/logger";
 import { effectRoute, mergeRoutes, type ControllerRouteApp } from "../../http/route-registrar";
 import { ComfyClient } from "./comfy-client";
-import { buildSdxlWorkflow } from "./comfy-workflow";
+import { buildComfyWorkflow } from "./comfy-workflow";
 
-const DEFAULT_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
+const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 
 type GenerationInput = {
@@ -136,8 +136,9 @@ export function registerImageRoutes(
           }
           const created = Math.floor(Date.now() / 1_000);
           const folder = new Date().toISOString().slice(0, 10);
-          const workflow = buildSdxlWorkflow({
-            checkpoint,
+          const isFlux2Klein = checkpoint.toLowerCase().includes("flux-2-klein");
+          const workflow = buildComfyWorkflow({
+            model: checkpoint,
             prompt: input.prompt,
             negativePrompt: input.negative_prompt?.trim() || DEFAULT_NEGATIVE,
             width,
@@ -148,8 +149,8 @@ export function registerImageRoutes(
               0,
               2 ** 32 - 1,
             ),
-            steps: integer(input.steps, 28, 1, 60),
-            cfg: decimal(input.cfg_scale, 7, 1, 20),
+            steps: integer(input.steps, isFlux2Klein ? 4 : 28, 1, 60),
+            cfg: decimal(input.cfg_scale, isFlux2Klein ? 1 : 7, 1, 20),
             count: integer(input.n, 1, 1, 4),
             filenamePrefix: `${context.config.comfyui_output_prefix}/${folder}/image`,
           });
