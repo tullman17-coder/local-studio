@@ -24,6 +24,126 @@ export type SdxlWorkflowInput = {
   filenamePrefix: string;
 };
 
+export type Flux2KleinWorkflowInput = {
+  diffusionModel: string;
+  textEncoder: string;
+  vae: string;
+  prompt: string;
+  width: number;
+  height: number;
+  seed: number;
+  steps: number;
+  cfg: number;
+  count: number;
+  filenamePrefix: string;
+};
+
+export type ComfyWorkflowInput = Omit<SdxlWorkflowInput, "checkpoint"> & {
+  model: string;
+};
+
+export const FLUX2_KLEIN_TEXT_ENCODER = "qwen_3_4b_fp4_flux2.safetensors";
+export const FLUX2_VAE = "flux2-vae.safetensors";
+
+export function buildComfyWorkflow(input: ComfyWorkflowInput): ComfyWorkflow {
+  if (input.model.toLowerCase().includes("flux-2-klein")) {
+    return buildFlux2KleinWorkflow({
+      diffusionModel: input.model,
+      textEncoder: FLUX2_KLEIN_TEXT_ENCODER,
+      vae: FLUX2_VAE,
+      prompt: input.prompt,
+      width: input.width,
+      height: input.height,
+      seed: input.seed,
+      steps: input.steps,
+      cfg: input.cfg,
+      count: input.count,
+      filenamePrefix: input.filenamePrefix,
+    });
+  }
+
+  return buildSdxlWorkflow({
+    checkpoint: input.model,
+    prompt: input.prompt,
+    negativePrompt: input.negativePrompt,
+    width: input.width,
+    height: input.height,
+    seed: input.seed,
+    steps: input.steps,
+    cfg: input.cfg,
+    count: input.count,
+    filenamePrefix: input.filenamePrefix,
+  });
+}
+
+export function buildFlux2KleinWorkflow(input: Flux2KleinWorkflowInput): ComfyWorkflow {
+  return {
+    "1": {
+      class_type: "UNETLoader",
+      inputs: { unet_name: input.diffusionModel, weight_dtype: "default" },
+    },
+    "2": {
+      class_type: "CLIPLoader",
+      inputs: { clip_name: input.textEncoder, type: "flux2", device: "default" },
+    },
+    "3": {
+      class_type: "VAELoader",
+      inputs: { vae_name: input.vae },
+    },
+    "4": {
+      class_type: "CLIPTextEncode",
+      inputs: { clip: ["2", 0], text: input.prompt },
+    },
+    "5": {
+      class_type: "ConditioningZeroOut",
+      inputs: { conditioning: ["4", 0] },
+    },
+    "6": {
+      class_type: "CFGGuider",
+      inputs: {
+        model: ["1", 0],
+        positive: ["4", 0],
+        negative: ["5", 0],
+        cfg: input.cfg,
+      },
+    },
+    "7": {
+      class_type: "RandomNoise",
+      inputs: { noise_seed: input.seed },
+    },
+    "8": {
+      class_type: "KSamplerSelect",
+      inputs: { sampler_name: "euler" },
+    },
+    "9": {
+      class_type: "Flux2Scheduler",
+      inputs: { steps: input.steps, width: input.width, height: input.height },
+    },
+    "10": {
+      class_type: "EmptyFlux2LatentImage",
+      inputs: { width: input.width, height: input.height, batch_size: input.count },
+    },
+    "11": {
+      class_type: "SamplerCustomAdvanced",
+      inputs: {
+        noise: ["7", 0],
+        guider: ["6", 0],
+        sampler: ["8", 0],
+        sigmas: ["9", 0],
+        latent_image: ["10", 0],
+      },
+    },
+    "12": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["11", 0], vae: ["3", 0] },
+    },
+    "13": {
+      class_type: "SaveImage",
+      inputs: { images: ["12", 0], filename_prefix: input.filenamePrefix },
+    },
+  };
+}
+
 export function buildSdxlWorkflow(input: SdxlWorkflowInput): ComfyWorkflow {
   return {
     "1": {
