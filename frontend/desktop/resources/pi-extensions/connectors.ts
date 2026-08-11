@@ -9,6 +9,8 @@
 // Loaded by pi-runtime only when at least one connector is enabled.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { Type } from "./schema.ts";
 
 type ToolResult = {
@@ -105,7 +107,64 @@ async function callConnectorTool(
   }
 }
 
+function registerConfiguredPluginTools(pi: ExtensionAPI, names: Set<string>): void {
+  const dataDir = process.env.LOCAL_STUDIO_DATA_DIR;
+  if (!dataDir) return;
+  const file = path.join(dataDir, "connectors.json");
+  if (!existsSync(file)) return;
+  let connectors: Array<{
+    id?: unknown;
+    name?: unknown;
+    enabled?: unknown;
+    allowTools?: unknown;
+  }> = [];
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as { connectors?: unknown };
+    connectors = Array.isArray(parsed.connectors) ? parsed.connectors : [];
+  } catch {
+    return;
+  }
+  for (const connector of connectors) {
+    if (
+      connector.enabled !== true ||
+      typeof connector.id !== "string" ||
+      !connector.id.startsWith("plugin-") ||
+      !Array.isArray(connector.allowTools)
+    ) {
+      continue;
+    }
+    const connectorName = typeof connector.name === "string" ? connector.name : connector.id;
+    for (const rawTool of connector.allowTools) {
+      if (typeof rawTool !== "string" || !rawTool.trim()) continue;
+      const tool = rawTool.trim();
+      const qualifiedName = `${connector.id.replace(/-/g, "_")}_${tool.replace(/[^A-Za-z0-9_]/g, "_")}`;
+      names.add(qualifiedName);
+      pi.registerTool({
+        name: qualifiedName,
+        label: `${connectorName}: ${tool}`,
+        description: `${tool} via the ${connectorName} connector`,
+        parameters: Type.Unsafe<Record<string, unknown>>({
+          type: "object",
+          additionalProperties: true,
+        }),
+        async execute(_id, params, signal) {
+          return callConnectorTool(connector.id as string, tool, params ?? {}, signal);
+        },
+      });
+    }
+  }
+}
+
 export default async function connectorsExtension(pi: ExtensionAPI): Promise<void> {
+  const observePluginTools = new Set<string>();
+  registerConfiguredPluginTools(pi, observePluginTools);
+  if (observePluginTools.size > 0) {
+    const activateObservePluginTools = () => {
+      pi.setActiveTools([...new Set([...pi.getActiveTools(), ...observePluginTools])]);
+    };
+    pi.on("session_start", activateObservePluginTools);
+    pi.on("before_agent_start", activateObservePluginTools);
+  }
   let inventory: InventoryConnector[] = [];
   try {
     const inventoryUrl = `${FRONTEND_BASE}/api/agent/connectors/call?model_id=${encodeURIComponent(modelId())}`;
@@ -120,6 +179,7 @@ export default async function connectorsExtension(pi: ExtensionAPI): Promise<voi
   for (const connector of inventory) {
     for (const tool of connector.tools) {
       const qualifiedName = `${connector.id.replace(/-/g, "_")}_${tool.name.replace(/[^A-Za-z0-9_]/g, "_")}`;
+      if (connector.id.startsWith("plugin-")) observePluginTools.add(qualifiedName);
       pi.registerTool({
         name: qualifiedName,
         label: `${connector.name}: ${tool.name}`,
