@@ -53,4 +53,22 @@ describe("ComfyUI image workflow", () => {
       },
     ]);
   });
+
+  test("ignores active-content and header-injection filenames from history", () => {
+    const outputs = outputImagesFromHistory({
+      outputs: {
+        node: {
+          images: [
+            { filename: "evil.svg", subfolder: "", type: "output" },
+            { filename: "line\r\nX-Evil.png", subfolder: "", type: "output" },
+            { filename: "emoji-💣.png", subfolder: "", type: "output" },
+            { filename: "safe.webp", subfolder: "local-studio", type: "output" },
+          ],
+        },
+      },
+    });
+    expect(outputs).toEqual([
+      { filename: "safe.webp", subfolder: "local-studio", type: "output" },
+    ]);
+  });
 });

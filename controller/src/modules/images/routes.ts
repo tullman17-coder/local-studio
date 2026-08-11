@@ -2,12 +2,14 @@ import { Effect } from "effect";
 import type { Config } from "../../config/env";
 import type { Logger } from "../../core/logger";
 import { effectHandler } from "../../http/effect-handler";
+import { readBoundedRequestBody } from "../../http/bounded-body";
 import { documentRoute, mergeRoutes, type ControllerRouteApp } from "../../http/route-registrar";
 import { ComfyClient } from "./comfy-client";
 import { buildComfyWorkflow } from "./comfy-workflow";
 
 const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
+const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
 
 type GenerationInput = {
   prompt: string;
@@ -68,8 +70,11 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   const input = value as GenerationInput;
   const prompt = typeof input.prompt === "string" ? input.prompt.trim() : "";
   if (!prompt || prompt.length > 4_000) throw new Error("Prompt must be 1 to 4000 characters");
-  if (input.negative_prompt !== undefined && input.negative_prompt.length > 2_000) {
-    throw new Error("Negative prompt must be 2000 characters or fewer");
+  if (
+    input.negative_prompt !== undefined &&
+    (typeof input.negative_prompt !== "string" || input.negative_prompt.length > 2_000)
+  ) {
+    throw new Error("Negative prompt must be a string of 2000 characters or fewer");
   }
   return { ...input, prompt };
 }
@@ -96,15 +101,16 @@ function failure(context: ImageRoutesContext, error: unknown): Response {
     message.startsWith("Image dimensions") ||
     message.startsWith("Expected ") ||
     message.startsWith("A JSON");
-  if (!invalid) context.logger.error("image generation route failed", { error: message });
+  const invalidRequest = invalid || message.startsWith("Request body exceeds");
+  if (!invalidRequest) context.logger.error("image generation route failed", { error: message });
   return Response.json(
     {
       error: {
-        code: invalid ? "invalid_image_request" : "image_generation_failed",
-        message: invalid ? message : "Image generation failed",
+        code: invalidRequest ? "invalid_image_request" : "image_generation_failed",
+        message: invalidRequest ? message : "Image generation failed",
       },
     },
-    { status: invalid ? 400 : 502 },
+    { status: invalidRequest ? 400 : 502 },
   );
 }
 
@@ -120,8 +126,9 @@ export function registerImageRoutes(
         const client = imageClient(context);
         if (!client) return Effect.succeed(unavailable());
         return Effect.gen(function* () {
-          const body = yield* Effect.tryPromise({
-            try: () => ctx.req.json(),
+          const bytes = yield* readBoundedRequestBody(ctx.req.raw, MAX_IMAGE_REQUEST_BYTES);
+          const body = yield* Effect.try({
+            try: () => JSON.parse(new TextDecoder().decode(bytes)) as unknown,
             catch: () => new Error("A JSON request body is required"),
           });
           const input = generationInput(body);
@@ -187,6 +194,8 @@ export function registerImageRoutes(
                 "content-type": image.contentType,
                 "content-disposition": `inline; filename="${image.filename.replaceAll('"', "")}"`,
                 "cache-control": "private, max-age=31536000, immutable",
+                "x-content-type-options": "nosniff",
+                "content-security-policy": "default-src 'none'; sandbox",
               },
             });
           }),

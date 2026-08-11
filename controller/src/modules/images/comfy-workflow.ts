@@ -192,10 +192,19 @@ function safePathPart(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.length > 0 &&
+    /^[A-Za-z0-9._ -]+$/.test(value) &&
     !value.includes("..") &&
     !value.includes("/") &&
     !value.includes("\\") &&
-    !value.includes("\0")
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
+}
+
+function safeOutputFilename(value: unknown): value is string {
+  return (
+    safePathPart(value) &&
+    value.length <= 255 &&
+    /\.(?:png|jpe?g|webp)$/i.test(value)
   );
 }
 
@@ -219,7 +228,7 @@ export function outputImagesFromHistory(history: unknown): ComfyOutputImage[] {
       const candidate = image as { filename?: unknown; subfolder?: unknown; type?: unknown };
       if (
         candidate.type !== "output" ||
-        !safePathPart(candidate.filename) ||
+        !safeOutputFilename(candidate.filename) ||
         !safeSubfolder(candidate.subfolder)
       ) {
         return [];
