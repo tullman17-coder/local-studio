@@ -1,4 +1,4 @@
-import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_BASH_TIMEOUT_SECONDS = 120;
 const MAX_BASH_TIMEOUT_SECONDS = 900;
@@ -17,7 +17,7 @@ export default function localStudioTimeouts(pi: ExtensionAPI) {
   const maxTimeout = readSeconds("LOCAL_STUDIO_BASH_MAX_TIMEOUT_SECONDS", MAX_BASH_TIMEOUT_SECONDS);
 
   pi.on("tool_call", (event) => {
-    if (!isToolCallEventType("bash", event)) return;
+    if (event.toolName !== "bash") return;
     const current = Number(event.input.timeout);
     if (!Number.isFinite(current) || current <= 0) {
       event.input.timeout = defaultTimeout;
