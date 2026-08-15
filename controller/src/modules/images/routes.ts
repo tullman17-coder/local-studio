@@ -8,11 +8,15 @@ import { ComfyClient } from "./comfy-client";
 import { buildComfyWorkflow } from "./comfy-workflow";
 
 const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
+const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
+const NSFW_MINOR_TERMS =
+  /\b(?:minor(?:s)?|underage|child(?:ren)?|kid(?:s)?|teen(?:s|ager|agers)?|schoolgirl(?:s)?|schoolboy(?:s)?|baby|babies|toddler(?:s)?)\b|\b(?:little|young)[\s-]+(?:girl|boy)(?:s)?\b/i;
 
 type GenerationInput = {
   prompt: string;
+  nsfw?: boolean;
   negative_prompt?: string;
   model?: string;
   n?: number;
@@ -76,6 +80,12 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   ) {
     throw new Error("Negative prompt must be a string of 2000 characters or fewer");
   }
+  if (input.nsfw !== undefined && typeof input.nsfw !== "boolean") {
+    throw new Error("NSFW mode must be a boolean");
+  }
+  if (input.nsfw && NSFW_MINOR_TERMS.test(prompt)) {
+    throw new Error("Prompt is not allowed");
+  }
   return { ...input, prompt };
 }
 
@@ -99,6 +109,7 @@ function failure(context: ImageRoutesContext, error: unknown): Response {
     message.startsWith("Negative ") ||
     message.startsWith("Size ") ||
     message.startsWith("Image dimensions") ||
+    message.startsWith("NSFW ") ||
     message.startsWith("Expected ") ||
     message.startsWith("A JSON");
   const invalidRequest = invalid || message.startsWith("Request body exceeds");
@@ -131,9 +142,14 @@ export function registerImageRoutes(
             try: () => JSON.parse(new TextDecoder().decode(bytes)) as unknown,
             catch: () => new Error("A JSON request body is required"),
           });
-          const input = generationInput(body);
+          const input = yield* Effect.try({
+            try: () => generationInput(body),
+            catch: (error) => error,
+          });
           const { width, height } = imageSize(input.size);
-          const checkpoint = context.config.comfyui_checkpoint ?? DEFAULT_CHECKPOINT;
+          const checkpoint = input.nsfw
+            ? NSFW_CHECKPOINT
+            : (context.config.comfyui_checkpoint ?? DEFAULT_CHECKPOINT);
           if (input.model && input.model !== checkpoint) {
             return Response.json(
               {
