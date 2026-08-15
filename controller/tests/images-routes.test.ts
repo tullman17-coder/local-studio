@@ -72,6 +72,40 @@ describe("POST /v1/images/generations NSFW mode", () => {
     expect(fetchCalls).toBe(0);
   });
 
+  test("rejects NSFW prompts without an explicit adult-age affirmation", async () => {
+    const response = await generate({ prompt: "a boudoir portrait", nsfw: true });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { code: "invalid_image_request", message: "Prompt is not allowed" },
+    });
+    expect(fetchCalls).toBe(0);
+  });
+
+  test("accepts 18+ and numeric adult-age affirmations", async () => {
+    for (const prompt of [
+      "an 18+ boudoir portrait",
+      "a 27-year-old model in a private studio",
+      "a model age 18 in a private studio",
+      "a 22 y/o model in a private studio",
+    ]) {
+      const response = await generate({ prompt, nsfw: true });
+      expect(response.status).toBe(200);
+    }
+    expect(fetchCalls).toBe(8);
+  });
+
+  test("rejects every numeric age below 18 even with an adult affirmation", async () => {
+    for (const prompt of ["a 17-year-old adult", "an adult, age 9", "an adult 0 years old"]) {
+      const response = await generate({ prompt, nsfw: true });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: { code: "invalid_image_request", message: "Prompt is not allowed" },
+      });
+    }
+    expect(fetchCalls).toBe(0);
+  });
+
   test("rejects clear minor terms in NSFW prompts with a generic validation error", async () => {
     const prohibitedTerms = [
       "minor",
@@ -82,15 +116,36 @@ describe("POST /v1/images/generations NSFW mode", () => {
       "schoolgirl",
       "schoolboy",
       "little girl",
-      "little boy",
+      "little-boy",
       "young girl",
-      "young boy",
+      "young-boy",
       "baby",
       "toddler",
+      "preteen",
+      "pre teen",
+      "pre-teen",
+      "adolescent",
+      "infant",
+      "newborn",
+      "new born",
+      "new-born",
+      "juvenile",
+      "school girl",
+      "school-boy",
+      "high school",
+      "high-school",
+      "freshman",
+      "middle school",
+      "middle-school",
+      "elementary",
+      "young woman",
+      "young-woman",
+      "young man",
+      "young-man",
     ];
 
     for (const term of prohibitedTerms) {
-      const response = await generate({ prompt: `portrait of a ${term}`, nsfw: true });
+      const response = await generate({ prompt: `adult portrait of a ${term}`, nsfw: true });
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
         error: { code: "invalid_image_request", message: "Prompt is not allowed" },

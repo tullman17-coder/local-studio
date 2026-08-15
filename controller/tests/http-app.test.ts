@@ -119,6 +119,21 @@ describe("controller HTTP application", () => {
     expect([...documentedOperations].sort()).toEqual([...registeredOperations].sort());
   });
 
+  test("rejects oversized chat completion bodies before parsing or proxying", async () => {
+    const response = await app.request("/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(16 * 1024 * 1024 + 1),
+        "x-api-key": apiKey,
+      },
+      body: "{}",
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ detail: "Request body too large" });
+  });
+
   test("falls back to persisted logs when a Docker container no longer exists", async () => {
     const sessionId = "stale-docker-session";
     await runtime.runPromise(

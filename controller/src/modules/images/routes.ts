@@ -11,8 +11,20 @@ const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
-const NSFW_MINOR_TERMS =
-  /\b(?:minor(?:s)?|underage|child(?:ren)?|kid(?:s)?|teen(?:s|ager|agers)?|schoolgirl(?:s)?|schoolboy(?:s)?|baby|babies|toddler(?:s)?)\b|\b(?:little|young)[\s-]+(?:girl|boy)(?:s)?\b/i;
+const NSFW_YOUTH_TERMS =
+  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|teen(?:s|age(?:r|rs)?)?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man))(?:s)?\b/i;
+const NSFW_ADULT_TERM = /\badults?\b/i;
+const NSFW_18_PLUS = /\b18\s*\+/;
+const NSFW_NUMERIC_AGE =
+  /\b(?:(\d{1,3})\s*(?:[-\s]+year[-\s]+old|years?\s+old|y\s*\/?\s*o)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
+
+function numericAges(prompt: string): number[] {
+  return [...prompt.matchAll(NSFW_NUMERIC_AGE)].map((match) => Number(match[1] ?? match[2]));
+}
+
+function affirmsAdultAge(prompt: string, ages: readonly number[]): boolean {
+  return NSFW_ADULT_TERM.test(prompt) || NSFW_18_PLUS.test(prompt) || ages.some((age) => age >= 18);
+}
 
 type GenerationInput = {
   prompt: string;
@@ -83,8 +95,15 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   if (input.nsfw !== undefined && typeof input.nsfw !== "boolean") {
     throw new Error("NSFW mode must be a boolean");
   }
-  if (input.nsfw && NSFW_MINOR_TERMS.test(prompt)) {
-    throw new Error("Prompt is not allowed");
+  if (input.nsfw) {
+    const ages = numericAges(prompt);
+    if (
+      NSFW_YOUTH_TERMS.test(prompt) ||
+      ages.some((age) => age < 18) ||
+      !affirmsAdultAge(prompt, ages)
+    ) {
+      throw new Error("Prompt is not allowed");
+    }
   }
   return { ...input, prompt };
 }

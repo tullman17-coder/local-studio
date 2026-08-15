@@ -1,6 +1,10 @@
 import { performance } from "node:perf_hooks";
 import { Effect, Schema } from "effect";
 import { HttpStatus, notFound } from "../../core/errors";
+import {
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from "../../http/bounded-body";
 import { effectHandler } from "../../http/effect-handler";
 import { isRecipeRunning } from "../models/recipes/recipe-matching";
 import { documentRoute, defineRoutes, mergeRoutes } from "../../http/route-registrar";
@@ -27,6 +31,8 @@ import {
   type OpenAIUsage,
 } from "./chat-request";
 import { buildChatCompletionsStreamResponse } from "./chat-completions-stream";
+
+const MAX_CHAT_REQUEST_BYTES = 16 * 1024 * 1024;
 
 export interface ModelNotRunningError {
   error: { message: string; type: "model_not_running"; code: "model_not_running" };
@@ -195,10 +201,15 @@ export const registerOpenAIRoutes = defineRoutes((app, context) => {
       documentRoute,
       effectHandler((ctx) =>
         Effect.gen(function* () {
-          const bodyRead = yield* Effect.tryPromise({
-            try: () => ctx.req.arrayBuffer(),
-            catch: () => new HttpStatus({ status: 400, detail: "Invalid request body" }),
-          }).pipe(
+          const bodyRead = yield* readBoundedRequestBody(
+            ctx.req.raw,
+            MAX_CHAT_REQUEST_BYTES,
+          ).pipe(
+            Effect.mapError((error) =>
+              error instanceof RequestBodyTooLargeError
+                ? new HttpStatus({ status: 413, detail: "Request body too large" })
+                : new HttpStatus({ status: 400, detail: "Invalid request body" }),
+            ),
             Effect.match({
               onFailure: (error) => ({ ok: false as const, error }),
               onSuccess: (value) => ({ ok: true as const, value }),
