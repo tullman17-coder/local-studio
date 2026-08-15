@@ -17,9 +17,9 @@ const NSFW_YOUTH_TERMS =
 const NSFW_NUMERIC_AGE =
   /\b(?:(\d{1,3})\s*(?:[-\s]+(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?\b)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
 const NSFW_SPELLED_MINOR_AGE =
-  /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)[-\s]+(?:(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?)\b/i;
+  /\b(?:(?:age|aged)\s*[:=-]?\s*(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)|(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)[-\s]+(?:(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?))\b/i;
 const NSFW_UNDER_ADULT_AGE =
-  /\b(?:under|younger[\s-]+than)[\s-]+(?:18|eighteen)\b/i;
+  /\b(?:under|below|younger[\s-]+than|less[\s-]+than|not[\s-]+yet|pre)[\s-]*(?:18|eighteen)\b/i;
 
 function numericAges(prompt: string): number[] {
   return [...prompt.matchAll(NSFW_NUMERIC_AGE)].map((match) => Number(match[1] ?? match[2]));

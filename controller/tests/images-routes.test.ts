@@ -113,6 +113,10 @@ describe("POST /v1/images/generations NSFW mode", () => {
       `${ADULT_ASSERTION} a seventeen y/o model`,
       `${ADULT_ASSERTION} a subject under 18`,
       `${ADULT_ASSERTION} a subject under eighteen`,
+      `${ADULT_ASSERTION} a 16yo model`,
+      `${ADULT_ASSERTION} a model age seventeen`,
+      `${ADULT_ASSERTION} a subject below 18`,
+      `${ADULT_ASSERTION} a subject not yet 18`,
     ]) {
       const response = await generate({ prompt, nsfw: true });
       expect(response.status).toBe(400);
