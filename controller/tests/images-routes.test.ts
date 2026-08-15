@@ -5,6 +5,7 @@ import { controllerRuntimeMiddleware, type ControllerEnvironment } from "../src/
 import { registerImageRoutes } from "../src/modules/images/routes";
 
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
+const NSFW_REALISTIC_CHECKPOINT = "flux1-dev-fp8.safetensors";
 const SAFE_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const ADULT_ASSERTION = "All depicted people are consenting adults age 18 or older.";
 const originalFetch = globalThis.fetch;
@@ -73,19 +74,16 @@ describe("POST /v1/images/generations NSFW mode", () => {
     expect(fetchCalls).toBe(0);
   });
 
-  test("rejects NSFW prompts without an explicit adult-age affirmation", async () => {
+  test("trusts ordinary local adult prompts without requiring a magic assertion", async () => {
     for (const prompt of [
-      "a boudoir portrait",
-      "for adults only: an erotic portrait of an age-ambiguous subject",
-      "an adult erotic portrait",
+      "a boudoir portrait of an adult",
+      "a young woman in her twenties",
+      "an adult student portrait",
     ]) {
       const response = await generate({ prompt, nsfw: true });
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
-        error: { code: "invalid_image_request", message: "Prompt is not allowed" },
-      });
+      expect(response.status).toBe(200);
     }
-    expect(fetchCalls).toBe(0);
+    expect(fetchCalls).toBe(6);
   });
 
   test("accepts 18+ and numeric adult-age affirmations", async () => {
@@ -127,7 +125,7 @@ describe("POST /v1/images/generations NSFW mode", () => {
     expect(fetchCalls).toBe(0);
   });
 
-  test("rejects clear minor terms in NSFW prompts with a generic validation error", async () => {
+  test("rejects explicit minor intent but not broad adult style vocabulary", async () => {
     const prohibitedTerms = [
       "minor",
       "underage",
@@ -136,10 +134,6 @@ describe("POST /v1/images/generations NSFW mode", () => {
       "teen",
       "schoolgirl",
       "schoolboy",
-      "little girl",
-      "little-boy",
-      "young girl",
-      "young-boy",
       "baby",
       "toddler",
       "preteen",
@@ -150,28 +144,6 @@ describe("POST /v1/images/generations NSFW mode", () => {
       "newborn",
       "new born",
       "new-born",
-      "juvenile",
-      "school girl",
-      "school-boy",
-      "high school",
-      "high-school",
-      "freshman",
-      "middle school",
-      "middle-school",
-      "elementary",
-      "young woman",
-      "young-woman",
-      "young man",
-      "young-man",
-      "youth",
-      "young person",
-      "age-ambiguous",
-      "youthful",
-      "girl",
-      "boy",
-      "student",
-      "pupil",
-      "grade-school",
       "loli",
       "lolita",
       "lolicon",
@@ -188,6 +160,40 @@ describe("POST /v1/images/generations NSFW mode", () => {
         error: { code: "invalid_image_request", message: "Prompt is not allowed" },
       });
     }
+    expect(fetchCalls).toBe(0);
+  });
+
+  test("hot-swaps the allowlisted NSFW checkpoint by style", async () => {
+    const realistic = await generate({
+      prompt: "an adult editorial portrait",
+      nsfw: true,
+      nsfw_style: "realistic",
+    });
+    expect(realistic.status).toBe(200);
+    expect(submittedWorkflows[0]!["1"]).toEqual({
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: NSFW_REALISTIC_CHECKPOINT },
+    });
+
+    const illustrated = await generate({
+      prompt: "an adult anime illustration",
+      nsfw: true,
+      nsfw_style: "illustrated",
+    });
+    expect(illustrated.status).toBe(200);
+    expect(submittedWorkflows[1]!["1"]).toEqual({
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: NSFW_CHECKPOINT },
+    });
+  });
+
+  test("rejects unknown NSFW styles before contacting ComfyUI", async () => {
+    const response = await generate({
+      prompt: "an adult portrait",
+      nsfw: true,
+      nsfw_style: "custom-model",
+    });
+    expect(response.status).toBe(400);
     expect(fetchCalls).toBe(0);
   });
 

@@ -9,11 +9,11 @@ import { buildComfyWorkflow } from "./comfy-workflow";
 
 const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
+const NSFW_REALISTIC_CHECKPOINT = "flux1-dev-fp8.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
-const NSFW_REQUIRED_ASSERTION = "all depicted people are consenting adults age 18 or older.";
 const NSFW_YOUTH_TERMS =
-  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|youth(?:s|ful)?|teen(?:s|age(?:r|rs)?)?|girls?|boys?|students?|pupils?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|grade[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary|loli\w*|shota\w*|age[\s-]*ambiguous|barely[\s-]*legal|just[\s-]+turned[\s-]+18)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man|person))(?:s)?\b/i;
+  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kids?|teen(?:s|age(?:r|rs)?)?|school[\s-]*(?:girl|boy)(?:s)?|bab(?:y|ies)|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|loli\w*|shota\w*|barely[\s-]*legal|just[\s-]+turned[\s-]+18)\b/i;
 const NSFW_NUMERIC_AGE =
   /\b(?:(\d{1,3})\s*(?:[-\s]+(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?\b)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
 const NSFW_SPELLED_MINOR_AGE =
@@ -29,6 +29,7 @@ function numericAges(prompt: string): number[] {
 type GenerationInput = {
   prompt: string;
   nsfw?: boolean;
+  nsfw_style?: "realistic" | "illustrated";
   negative_prompt?: string;
   model?: string;
   n?: number;
@@ -95,10 +96,19 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   if (input.nsfw !== undefined && typeof input.nsfw !== "boolean") {
     throw new Error("NSFW mode must be a boolean");
   }
+  if (
+    input.nsfw_style !== undefined &&
+    input.nsfw_style !== "realistic" &&
+    input.nsfw_style !== "illustrated"
+  ) {
+    throw new Error("NSFW style must be realistic or illustrated");
+  }
+  if (!input.nsfw && input.nsfw_style !== undefined) {
+    throw new Error("NSFW style requires NSFW mode");
+  }
   if (input.nsfw) {
     const ages = numericAges(prompt);
     if (
-      !prompt.toLowerCase().startsWith(NSFW_REQUIRED_ASSERTION) ||
       NSFW_YOUTH_TERMS.test(prompt) ||
       NSFW_SPELLED_MINOR_AGE.test(prompt) ||
       NSFW_UNDER_ADULT_AGE.test(prompt) ||
@@ -170,7 +180,9 @@ export function registerImageRoutes(
           });
           const { width, height } = imageSize(input.size);
           const checkpoint = input.nsfw
-            ? NSFW_CHECKPOINT
+            ? input.nsfw_style === "realistic"
+              ? NSFW_REALISTIC_CHECKPOINT
+              : NSFW_CHECKPOINT
             : (context.config.comfyui_checkpoint ?? DEFAULT_CHECKPOINT);
           if (input.model && input.model !== checkpoint) {
             return Response.json(
@@ -186,6 +198,7 @@ export function registerImageRoutes(
           const created = Math.floor(Date.now() / 1_000);
           const folder = new Date().toISOString().slice(0, 10);
           const isFlux2Klein = checkpoint.toLowerCase().includes("flux-2-klein");
+          const isFlux1 = checkpoint.toLowerCase().includes("flux1-dev");
           const workflow = buildComfyWorkflow({
             model: checkpoint,
             prompt: input.prompt,
@@ -198,8 +211,8 @@ export function registerImageRoutes(
               0,
               2 ** 32 - 1,
             ),
-            steps: integer(input.steps, isFlux2Klein ? 4 : 28, 1, 60),
-            cfg: decimal(input.cfg_scale, isFlux2Klein ? 1 : 7, 1, 20),
+            steps: integer(input.steps, isFlux2Klein ? 4 : isFlux1 ? 20 : 28, 1, 60),
+            cfg: decimal(input.cfg_scale, isFlux2Klein || isFlux1 ? 1 : 7, 1, 20),
             count: integer(input.n, 1, 1, 4),
             filenamePrefix: `${context.config.comfyui_output_prefix}/${folder}/image`,
           });
