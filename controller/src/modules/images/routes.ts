@@ -13,11 +13,13 @@ const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
 const NSFW_REQUIRED_ASSERTION = "all depicted people are consenting adults age 18 or older.";
 const NSFW_YOUTH_TERMS =
-  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|youth(?:s|ful)?|teen(?:s|age(?:r|rs)?)?|girls?|boys?|students?|pupils?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|grade[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary|loli(?:ta)?|shota|age[\s-]*ambiguous|barely[\s-]*legal|just[\s-]+turned[\s-]+18)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man|person))(?:s)?\b/i;
+  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|youth(?:s|ful)?|teen(?:s|age(?:r|rs)?)?|girls?|boys?|students?|pupils?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|grade[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary|loli\w*|shota\w*|age[\s-]*ambiguous|barely[\s-]*legal|just[\s-]+turned[\s-]+18)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man|person))(?:s)?\b/i;
 const NSFW_NUMERIC_AGE =
-  /\b(?:(\d{1,3})\s*(?:[-\s]+(?:years?|yrs?)[-\s]+old|y\s*\/?\s*o)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
+  /\b(?:(\d{1,3})\s*(?:[-\s]+(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?\b)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
 const NSFW_SPELLED_MINOR_AGE =
-  /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)[-\s]+(?:years?|yrs?)[-\s]+old\b/i;
+  /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)[-\s]+(?:(?:years?|yrs?)[-\s]+old|y\s*[./-]?\s*o\.?)\b/i;
+const NSFW_UNDER_ADULT_AGE =
+  /\b(?:under|younger[\s-]+than)[\s-]+(?:18|eighteen)\b/i;
 
 function numericAges(prompt: string): number[] {
   return [...prompt.matchAll(NSFW_NUMERIC_AGE)].map((match) => Number(match[1] ?? match[2]));
@@ -99,6 +101,7 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
       !prompt.toLowerCase().startsWith(NSFW_REQUIRED_ASSERTION) ||
       NSFW_YOUTH_TERMS.test(prompt) ||
       NSFW_SPELLED_MINOR_AGE.test(prompt) ||
+      NSFW_UNDER_ADULT_AGE.test(prompt) ||
       ages.some((age) => age < 18) ||
       ages.some((age) => !Number.isSafeInteger(age))
     ) {
