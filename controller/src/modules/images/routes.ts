@@ -11,20 +11,18 @@ const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
+const NSFW_REQUIRED_ASSERTION = "all depicted people are consenting adults age 18 or older.";
 const NSFW_YOUTH_TERMS =
-  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|teen(?:s|age(?:r|rs)?)?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man))(?:s)?\b/i;
-const NSFW_ADULT_TERM = /\badults?\b/i;
-const NSFW_18_PLUS = /\b18\s*\+/;
+  /\b(?:minor(?:s)?|under[\s-]*age|child(?:ren)?|kid(?:s)?|youth(?:s|ful)?|teen(?:s|age(?:r|rs)?)?|girls?|boys?|students?|pupils?|school[\s-]*(?:girl|boy)(?:s)?|baby|babies|toddler(?:s)?|pre[\s-]*teen(?:s)?|adolescent(?:s)?|infant(?:s)?|new[\s-]*born(?:s)?|juvenile(?:s)?|high[\s-]*school|grade[\s-]*school|freshm(?:an|en)|middle[\s-]*school|elementary|loli(?:ta)?|shota|age[\s-]*ambiguous|barely[\s-]*legal|just[\s-]+turned[\s-]+18)\b|\b(?:little[\s-]+(?:girl|boy)|young[\s-]+(?:girl|boy|woman|man|person))(?:s)?\b/i;
 const NSFW_NUMERIC_AGE =
-  /\b(?:(\d{1,3})\s*(?:[-\s]+year[-\s]+old|years?\s+old|y\s*\/?\s*o)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
+  /\b(?:(\d{1,3})\s*(?:[-\s]+(?:years?|yrs?)[-\s]+old|y\s*\/?\s*o)|(?:age|aged)\s*[:=-]?\s*(\d{1,3}))\b/gi;
+const NSFW_SPELLED_MINOR_AGE =
+  /\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)[-\s]+(?:years?|yrs?)[-\s]+old\b/i;
 
 function numericAges(prompt: string): number[] {
   return [...prompt.matchAll(NSFW_NUMERIC_AGE)].map((match) => Number(match[1] ?? match[2]));
 }
 
-function affirmsAdultAge(prompt: string, ages: readonly number[]): boolean {
-  return NSFW_ADULT_TERM.test(prompt) || NSFW_18_PLUS.test(prompt) || ages.some((age) => age >= 18);
-}
 
 type GenerationInput = {
   prompt: string;
@@ -98,9 +96,11 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   if (input.nsfw) {
     const ages = numericAges(prompt);
     if (
+      !prompt.toLowerCase().startsWith(NSFW_REQUIRED_ASSERTION) ||
       NSFW_YOUTH_TERMS.test(prompt) ||
+      NSFW_SPELLED_MINOR_AGE.test(prompt) ||
       ages.some((age) => age < 18) ||
-      !affirmsAdultAge(prompt, ages)
+      ages.some((age) => !Number.isSafeInteger(age))
     ) {
       throw new Error("Prompt is not allowed");
     }

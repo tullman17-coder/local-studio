@@ -6,6 +6,7 @@ import { registerImageRoutes } from "../src/modules/images/routes";
 
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const SAFE_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
+const ADULT_ASSERTION = "All depicted people are consenting adults age 18 or older.";
 const originalFetch = globalThis.fetch;
 const runtime = createControllerRuntime();
 const submittedWorkflows: Record<string, unknown>[] = [];
@@ -73,21 +74,26 @@ describe("POST /v1/images/generations NSFW mode", () => {
   });
 
   test("rejects NSFW prompts without an explicit adult-age affirmation", async () => {
-    const response = await generate({ prompt: "a boudoir portrait", nsfw: true });
-
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({
-      error: { code: "invalid_image_request", message: "Prompt is not allowed" },
-    });
+    for (const prompt of [
+      "a boudoir portrait",
+      "for adults only: an erotic portrait of an age-ambiguous subject",
+      "an adult erotic portrait",
+    ]) {
+      const response = await generate({ prompt, nsfw: true });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: { code: "invalid_image_request", message: "Prompt is not allowed" },
+      });
+    }
     expect(fetchCalls).toBe(0);
   });
 
   test("accepts 18+ and numeric adult-age affirmations", async () => {
     for (const prompt of [
-      "an 18+ boudoir portrait",
-      "a 27-year-old model in a private studio",
-      "a model age 18 in a private studio",
-      "a 22 y/o model in a private studio",
+      `${ADULT_ASSERTION} an 18+ boudoir portrait`,
+      `${ADULT_ASSERTION} a 27-year-old model in a private studio`,
+      `${ADULT_ASSERTION} a model age 18 in a private studio`,
+      `${ADULT_ASSERTION} a 22 y/o model in a private studio`,
     ]) {
       const response = await generate({ prompt, nsfw: true });
       expect(response.status).toBe(200);
@@ -96,7 +102,14 @@ describe("POST /v1/images/generations NSFW mode", () => {
   });
 
   test("rejects every numeric age below 18 even with an adult affirmation", async () => {
-    for (const prompt of ["a 17-year-old adult", "an adult, age 9", "an adult 0 years old"]) {
+    for (const prompt of [
+      `${ADULT_ASSERTION} a 17-year-old adult`,
+      `${ADULT_ASSERTION} an adult, age 9`,
+      `${ADULT_ASSERTION} an adult 0 years old`,
+      `${ADULT_ASSERTION} a 17 years-old model`,
+      `${ADULT_ASSERTION} a 17 yrs old model`,
+      `${ADULT_ASSERTION} a seventeen-year-old model`,
+    ]) {
       const response = await generate({ prompt, nsfw: true });
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
@@ -142,10 +155,24 @@ describe("POST /v1/images/generations NSFW mode", () => {
       "young-woman",
       "young man",
       "young-man",
+      "youth",
+      "young person",
+      "age-ambiguous",
+      "youthful",
+      "girl",
+      "boy",
+      "student",
+      "pupil",
+      "grade-school",
+      "loli",
+      "lolita",
+      "shota",
+      "barely legal",
+      "just turned 18",
     ];
 
     for (const term of prohibitedTerms) {
-      const response = await generate({ prompt: `adult portrait of a ${term}`, nsfw: true });
+      const response = await generate({ prompt: `${ADULT_ASSERTION} portrait of a ${term}`, nsfw: true });
       expect(response.status).toBe(400);
       expect(await response.json()).toEqual({
         error: { code: "invalid_image_request", message: "Prompt is not allowed" },
@@ -170,7 +197,7 @@ describe("POST /v1/images/generations NSFW mode", () => {
 
   test("requires a supplied model to match the checkpoint selected by the mode", async () => {
     for (const body of [
-      { prompt: "an adult portrait", nsfw: true, model: SAFE_CHECKPOINT },
+      { prompt: `${ADULT_ASSERTION} an adult portrait`, nsfw: true, model: SAFE_CHECKPOINT },
       { prompt: "a landscape", nsfw: false, model: NSFW_CHECKPOINT },
     ]) {
       const response = await generate(body);
@@ -183,7 +210,7 @@ describe("POST /v1/images/generations NSFW mode", () => {
   });
 
   test("uses the SDXL negative prompt and defaults for an ordinary adult NSFW prompt", async () => {
-    const response = await generate({ prompt: "an adult boudoir portrait", nsfw: true });
+    const response = await generate({ prompt: `${ADULT_ASSERTION} an adult boudoir portrait`, nsfw: true });
 
     expect(response.status).toBe(200);
     expect(submittedWorkflows[0]!["3"]).toEqual({
@@ -201,7 +228,7 @@ describe("POST /v1/images/generations NSFW mode", () => {
 
   test("routes NSFW generation to the allowlisted SDXL checkpoint and preserves caller settings", async () => {
     const response = await generate({
-      prompt: "an adult couple in a private studio",
+      prompt: `${ADULT_ASSERTION} an adult couple in a private studio`,
       negative_prompt: "custom negative",
       nsfw: true,
       model: NSFW_CHECKPOINT,
@@ -220,7 +247,7 @@ describe("POST /v1/images/generations NSFW mode", () => {
     });
     expect(workflow["2"]).toEqual({
       class_type: "CLIPTextEncode",
-      inputs: { text: "an adult couple in a private studio", clip: ["1", 1] },
+      inputs: { text: `${ADULT_ASSERTION} an adult couple in a private studio`, clip: ["1", 1] },
     });
     expect(workflow["3"]).toEqual({
       class_type: "CLIPTextEncode",
