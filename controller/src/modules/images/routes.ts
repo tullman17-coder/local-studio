@@ -10,6 +10,13 @@ import { buildComfyWorkflow } from "./comfy-workflow";
 const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const NSFW_REALISTIC_CHECKPOINT = "flux1-dev-fp8.safetensors";
+const STYLE_PROFILES = new Set([
+  "dream", "photo", "anime", "fantasy", "cinematic", "pixel", "line", "vaporwave",
+  "documentary", "editorial", "noir", "watercolor", "gouache", "concept", "product", "surreal",
+]);
+const REALISTIC_STYLE_PROFILES = new Set([
+  "photo", "cinematic", "documentary", "editorial", "noir", "product",
+]);
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
 const NSFW_YOUTH_TERMS =
@@ -30,6 +37,7 @@ type GenerationInput = {
   prompt: string;
   nsfw?: boolean;
   nsfw_style?: "realistic" | "illustrated";
+  style_profile?: string;
   negative_prompt?: string;
   model?: string;
   n?: number;
@@ -106,6 +114,13 @@ function generationInput(value: unknown): GenerationInput & { prompt: string } {
   if (!input.nsfw && input.nsfw_style !== undefined) {
     throw new Error("NSFW style requires NSFW mode");
   }
+  if (input.style_profile !== undefined && !STYLE_PROFILES.has(input.style_profile)) {
+    throw new Error("Style profile is not supported");
+  }
+  if (input.nsfw_style !== undefined && input.style_profile !== undefined) {
+    const family = REALISTIC_STYLE_PROFILES.has(input.style_profile) ? "realistic" : "illustrated";
+    if (input.nsfw_style !== family) throw new Error("Style profile conflicts with NSFW style");
+  }
   if (input.nsfw) {
     const ages = numericAges(prompt);
     if (
@@ -142,6 +157,7 @@ function failure(context: ImageRoutesContext, error: unknown): Response {
     message.startsWith("Size ") ||
     message.startsWith("Image dimensions") ||
     message.startsWith("NSFW ") ||
+    message.startsWith("Style ") ||
     message.startsWith("Expected ") ||
     message.startsWith("A JSON");
   const invalidRequest = invalid || message.startsWith("Request body exceeds");
@@ -179,11 +195,15 @@ export function registerImageRoutes(
             catch: (error) => error,
           });
           const { width, height } = imageSize(input.size);
-          const checkpoint = input.nsfw
-            ? input.nsfw_style === "realistic"
+          const checkpoint = input.style_profile
+            ? REALISTIC_STYLE_PROFILES.has(input.style_profile)
               ? NSFW_REALISTIC_CHECKPOINT
               : NSFW_CHECKPOINT
-            : (context.config.comfyui_checkpoint ?? DEFAULT_CHECKPOINT);
+            : input.nsfw
+              ? input.nsfw_style === "realistic"
+                ? NSFW_REALISTIC_CHECKPOINT
+                : NSFW_CHECKPOINT
+              : (context.config.comfyui_checkpoint ?? DEFAULT_CHECKPOINT);
           if (input.model && input.model !== checkpoint) {
             return Response.json(
               {

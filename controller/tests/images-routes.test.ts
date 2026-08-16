@@ -187,6 +187,36 @@ describe("POST /v1/images/generations NSFW mode", () => {
     });
   });
 
+  test("routes semantic style profiles to real model families without prompt trigger injection", async () => {
+    const photo = await generate({
+      prompt: "a red umbrella on a plain table",
+      style_profile: "photo",
+    });
+    expect(photo.status).toBe(200);
+    expect(submittedWorkflows[0]!["1"]).toEqual({
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: NSFW_REALISTIC_CHECKPOINT },
+    });
+    expect(JSON.stringify(submittedWorkflows[0])).not.toContain("photographic composition");
+
+    const watercolor = await generate({
+      prompt: "a red umbrella on a plain table",
+      style_profile: "watercolor",
+    });
+    expect(watercolor.status).toBe(200);
+    expect(submittedWorkflows[1]!["1"]).toEqual({
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: NSFW_CHECKPOINT },
+    });
+    expect(JSON.stringify(submittedWorkflows[1])).not.toContain("watercolor");
+  });
+
+  test("rejects unknown style profiles before contacting ComfyUI", async () => {
+    const response = await generate({ prompt: "a landscape", style_profile: "custom-model" });
+    expect(response.status).toBe(400);
+    expect(fetchCalls).toBe(0);
+  });
+
   test("rejects unknown NSFW styles before contacting ComfyUI", async () => {
     const response = await generate({
       prompt: "an adult portrait",
