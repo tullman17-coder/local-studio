@@ -10,13 +10,8 @@ import { buildComfyWorkflow } from "./comfy-workflow";
 const DEFAULT_CHECKPOINT = "flux-2-klein-4b-nvfp4.safetensors";
 const NSFW_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 const NSFW_REALISTIC_CHECKPOINT = "flux1-dev-fp8.safetensors";
-const STYLE_PROFILES = new Set([
-  "dream", "photo", "anime", "fantasy", "cinematic", "pixel", "line", "vaporwave",
-  "documentary", "editorial", "noir", "watercolor", "gouache", "concept", "product", "surreal",
-]);
-const REALISTIC_STYLE_PROFILES = new Set([
-  "photo", "cinematic", "documentary", "editorial", "noir", "product",
-]);
+const STYLE_PROFILES = new Set(["photo", "anime"]);
+const REALISTIC_STYLE_PROFILES = new Set(["photo"]);
 const DEFAULT_NEGATIVE = "low quality, blurry, malformed, watermark, text";
 const MAX_IMAGE_REQUEST_BYTES = 16 * 1024;
 const NSFW_YOUTH_TERMS =
