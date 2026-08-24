@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import { Type } from "./schema.ts";
 
 type ToolResult = {
   content: Array<{ type: "text"; text: string }>;
@@ -47,9 +47,9 @@ export default function registerImageGenerationExtension(pi: ExtensionAPI): void
           description: "Output shape; defaults to square",
         }),
       ),
-      count: Type.Optional(Type.Integer({ minimum: 1, maximum: 4 })),
-      seed: Type.Optional(Type.Integer({ minimum: 0, maximum: 4_294_967_295 })),
-      steps: Type.Optional(Type.Integer({ minimum: 1, maximum: 60 })),
+      count: Type.Optional(Type.Number({ minimum: 1, maximum: 4 })),
+      seed: Type.Optional(Type.Number({ minimum: 0, maximum: 4_294_967_295 })),
+      steps: Type.Optional(Type.Number({ minimum: 1, maximum: 60 })),
       cfgScale: Type.Optional(Type.Number({ minimum: 1, maximum: 20 })),
     }),
     async execute(_id, params, signal) {

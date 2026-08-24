@@ -103,13 +103,34 @@ export const buildHuggingFaceFileList = (
       ),
     );
     if (ggufFamilies.size > 1) {
-      throw new Error(
-        `Multiple GGUF weight variants found. Choose one file before downloading: ${[
-          ...ggufFamilies,
-        ]
-          .slice(0, 8)
-          .join(", ")}`,
-      );
+      const rank = (name: string): number => {
+        const n = name.toLowerCase();
+        if (/(bf16|f16)/.test(n)) return 90;
+        if (n.includes("amd-mtp") || n.includes("low-mtp")) return 80;
+        if (n.includes("q4_k_m")) return 0;
+        if (n.includes("iq4_xs") && !n.includes("mtp")) return 1;
+        if (n.includes("iq4_nl") && !n.includes("mtp")) return 2;
+        if (n.includes("q5_k_m")) return 3;
+        if (n.includes("q4_k_s")) return 4;
+        if (n.includes("iq4_xs")) return 5;
+        if (n.includes("q6_k")) return 6;
+        if (n.includes("q8_0")) return 10;
+        return 50;
+      };
+      const chosen = [...ggufFamilies].sort((a, b) => rank(a) - rank(b) || a.length - b.length)[0];
+      if (!chosen) {
+        throw new Error(
+          `Multiple GGUF weight variants found. Choose one file before downloading: ${[
+            ...ggufFamilies,
+          ]
+            .slice(0, 8)
+            .join(", ")}`,
+        );
+      }
+      ignorePatterns = [
+        ...ignorePatterns,
+        ...[...ggufFamilies].filter((family) => family !== chosen),
+      ];
     }
   }
   const files: DownloadFileInfo[] = [];
