@@ -5,6 +5,7 @@ import { Effect, Schema } from "effect";
 import { effectRoute, defineRoutes, mergeRoutes } from "../../http/route-registrar";
 import type { Recipe } from "../models/types";
 import { resolveModelVision } from "@local-studio/contracts/model-capabilities";
+import { inferReasoningCapability } from "./infer-reasoning";
 
 interface OpenAIModelInfo {
   id: string;
@@ -55,10 +56,16 @@ function recipeMetadata(recipe: Recipe): Record<string, unknown> {
 
 function resolvedRecipeMetadata(recipe: Recipe, modelId: string): Record<string, unknown> {
   const metadata = recipeMetadata(recipe);
+  const identifiers = [modelId, recipe.id, recipe.name, recipe.model_path];
+  const reasoning =
+    typeof metadata.reasoning === "boolean"
+      ? metadata.reasoning
+      : inferReasoningCapability(recipe.model_path, identifiers);
   return {
     ...metadata,
+    reasoning,
     vision: resolveModelVision({
-      identifiers: [modelId, recipe.id, recipe.name, recipe.model_path],
+      identifiers,
       recipeOverride: recipe.vision,
       metadata,
     }),
